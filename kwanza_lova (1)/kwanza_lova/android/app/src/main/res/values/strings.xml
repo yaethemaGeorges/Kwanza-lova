@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<resources>
+    <string name="app_name">Kwanza-lova</string>
+    <string name="facebook_app_id">701342025899312</string>
+    <string name="fb_login_protocol_scheme">fb701342025899312</string>
+     <string name="facebook_client_token">f553ff0991a4c321f51db28811895ef7</string>
+          
+</resources>

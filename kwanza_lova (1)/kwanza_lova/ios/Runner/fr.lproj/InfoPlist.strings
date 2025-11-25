@@ -1,0 +1,4 @@
+NSCameraUsageDescription = "autorisez-vous que nous ayons accès à votre camera?";
+NSPhotoLibraryUsageDescription = "autorisez-vous que nous ayons accès à votre gallérie ?";
+NSMicrophoneUsageDescription = "autorisez-vous que nous ayons accès à votre microphone ?";
+PermissionGroupNotification = "autorisez-vous que nous vous envoyons des notifications 🔔 ?";
