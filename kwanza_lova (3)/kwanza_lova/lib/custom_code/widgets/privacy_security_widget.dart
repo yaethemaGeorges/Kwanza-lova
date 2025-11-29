@@ -127,16 +127,47 @@ class _PrivacySecurityWidgetState extends State<PrivacySecurityWidget> {
 
   List<Map<String, dynamic>> availableMatchesData = [];
   String? errorMessage;
+// ✅ AJOUT CRITIQUE : Gestion du StreamSubscription
+  StreamSubscription<QuerySnapshot>? _blockedContactsSubscription;
 
   @override
   void initState() {
     super.initState();
     _initializeData();
+    _setupBlockedContactsListener(); // ✅ AJOUT
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Écoute en temps réel des contacts bloqués
+  void _setupBlockedContactsListener() {
+    _blockedContactsSubscription = FirebaseFirestore.instance
+        .collection('blocked_contacts')
+        .where('blocker_id', isEqualTo: widget.currentUserId)
+        .orderBy('blocked_date', descending: true)
+        .limit(50)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          blockedContactsRefs =
+              snapshot.docs.map((doc) => doc.reference).toList();
+          _cachedBlockedContacts = blockedContactsRefs;
+          _lastBlockedContactsUpdate = DateTime.now();
+        });
+      }
+    }, onError: (error) {
+      print('❌ Erreur listener contacts bloqués: $error');
+
+      // Fallback sans index si nécessaire
+      if (error.toString().contains('index')) {
+        _loadBlockedContacts(); // Utilise la méthode existante
+      }
+    });
   }
 
   @override
   void dispose() {
     reportDetailsController.dispose();
+    _blockedContactsSubscription?.cancel(); // ✅ CRITIQUE : Annuler le listener
     super.dispose();
   }
 
@@ -309,6 +340,26 @@ class _PrivacySecurityWidgetState extends State<PrivacySecurityWidget> {
     } catch (e) {
       print('❌ Erreur chargement matches: $e');
     }
+  }
+
+  // ✅ NOUVELLE MÉTHODE : Charge les détails des contacts bloqués
+  Future<List<Map<String, dynamic>>> _loadBlockedContactsDetails() async {
+    List<Map<String, dynamic>> contacts = [];
+
+    for (var ref in blockedContactsRefs) {
+      try {
+        final doc = await ref.get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          data['ref'] = ref; // Garde la référence pour le déblocage
+          contacts.add(data);
+        }
+      } catch (e) {
+        print('❌ Erreur chargement contact bloqué: $e');
+      }
+    }
+
+    return contacts;
   }
 
   String _formatTimestamp(dynamic date) {
@@ -895,145 +946,129 @@ class _PrivacySecurityWidgetState extends State<PrivacySecurityWidget> {
 
   // ✅ OPTIMISATION : StreamBuilder avec gestion d'erreur d'index
   Widget buildBlockedContactsList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('blocked_contacts')
-          .where('blocker_id', isEqualTo: widget.currentUserId)
-          .orderBy('blocked_date', descending: true)
-          .limit(50) // ✅ LIMITE AJOUTÉE
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          final error = snapshot.error.toString();
-
-          // Gestion spécifique erreur d'index
-          if (error.contains('index') || error.contains('requires an index')) {
-            return Center(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              onPressed: () => setState(() => selectedSection = 'main'),
+              icon: Icon(Icons.arrow_back, color: textColor),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.9),
+                shape: CircleBorder(),
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.error_outline, size: 48, color: tertiaryColor),
-                  SizedBox(height: 16),
-                  Text('Index Firestore requis',
+                  Text('Matches bloqués',
                       style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: textColor)),
-                  SizedBox(height: 8),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                        'L\'index est en cours de création.\nVeuillez patienter 2-5 minutes.',
-                        textAlign: TextAlign.center,
-                        style:
-                            TextStyle(color: textSecondaryColor, fontSize: 14)),
-                  ),
-                  SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => setState(() {}),
-                    icon: Icon(Icons.refresh),
-                    label: Text('Actualiser'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
+                  Text('${blockedContactsRefs.length} match(s)',
+                      style:
+                          TextStyle(fontSize: 14, color: textSecondaryColor)),
                 ],
               ),
-            );
-          }
+            ),
+          ],
+        ),
+        SizedBox(height: 24),
 
-          return Center(
-              child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Erreur: ${snapshot.error}',
-                style: TextStyle(color: textColor),
-                textAlign: TextAlign.center),
-          ));
-        }
-
-        if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator(color: primaryColor));
-        }
-
-        final blockedDocs = snapshot.data!.docs;
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+        // ✅ UTILISER FutureBuilder AU LIEU DE StreamBuilder
+        if (blockedContactsRefs.isEmpty) ...[
+          Container(
+            padding: EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
               children: [
-                IconButton(
-                  onPressed: () => setState(() => selectedSection = 'main'),
-                  icon: Icon(Icons.arrow_back, color: textColor),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withOpacity(0.9),
-                    shape: CircleBorder(),
-                  ),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Matches bloqués',
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: textColor)),
-                      Text('${blockedDocs.length} match(s)',
-                          style: TextStyle(
-                              fontSize: 14, color: textSecondaryColor)),
-                    ],
-                  ),
-                ),
+                Icon(Icons.block, size: 48, color: textSecondaryColor),
+                SizedBox(height: 16),
+                Text('Aucun match bloqué',
+                    style: TextStyle(
+                        fontSize: 18,
+                        color: textColor,
+                        fontWeight: FontWeight.w600)),
+                SizedBox(height: 8),
+                Text('Vous n\'avez bloqué aucun de vos matches.',
+                    style: TextStyle(fontSize: 14, color: textSecondaryColor),
+                    textAlign: TextAlign.center),
               ],
             ),
-            SizedBox(height: 24),
-            if (blockedDocs.isEmpty) ...[
-              Container(
-                padding: EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.block, size: 48, color: textSecondaryColor),
-                    SizedBox(height: 16),
-                    Text('Aucun match bloqué',
-                        style: TextStyle(
-                            fontSize: 18,
-                            color: textColor,
-                            fontWeight: FontWeight.w600)),
-                    SizedBox(height: 8),
-                    Text('Vous n\'avez bloqué aucun de vos matches.',
-                        style:
-                            TextStyle(fontSize: 14, color: textSecondaryColor),
-                        textAlign: TextAlign.center),
-                  ],
-                ),
-              ),
-            ] else ...[
-              Container(
-                constraints: BoxConstraints(maxHeight: 250),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListView.separated(
+          ),
+        ] else ...[
+          Container(
+            constraints: BoxConstraints(maxHeight: 250),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadBlockedContactsDetails(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(color: primaryColor),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.error_outline,
+                              size: 48, color: tertiaryColor),
+                          SizedBox(height: 8),
+                          Text('Erreur de chargement',
+                              style: TextStyle(color: textColor)),
+                          SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => setState(() {}),
+                            child: Text('Réessayer'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('Aucun contact bloqué',
+                          style: TextStyle(color: textSecondaryColor)),
+                    ),
+                  );
+                }
+
+                final blockedContacts = snapshot.data!;
+
+                return ListView.separated(
                   shrinkWrap: true,
-                  itemCount: blockedDocs.length,
+                  itemCount: blockedContacts.length,
                   separatorBuilder: (context, index) => Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final doc = blockedDocs[index];
-                    final data = doc.data() as Map<String, dynamic>;
+                    final contact = blockedContacts[index];
 
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: tertiaryColor,
                         child: Text(
-                          (data['blocked_user_name'] ?? 'U')
+                          (contact['blocked_user_name'] ?? 'U')
                               .toString()
                               .substring(0, 1)
                               .toUpperCase(),
@@ -1041,22 +1076,22 @@ class _PrivacySecurityWidgetState extends State<PrivacySecurityWidget> {
                               color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
-                      title: Text(data['blocked_user_name'] ?? 'Utilisateur',
+                      title: Text(contact['blocked_user_name'] ?? 'Utilisateur',
                           style: TextStyle(
                               color: textColor, fontWeight: FontWeight.w600)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                              'Bloqué: ${_formatTimestamp(data['blocked_date'])}',
+                              'Bloqué: ${_formatTimestamp(contact['blocked_date'])}',
                               style: TextStyle(
                                   color: textSecondaryColor, fontSize: 12)),
-                          Text(data['reason'] ?? 'Non spécifié',
+                          Text(contact['reason'] ?? 'Non spécifié',
                               style: TextStyle(color: textColor, fontSize: 12)),
                         ],
                       ),
                       trailing: TextButton(
-                        onPressed: () => unblockContact(doc.reference),
+                        onPressed: () => unblockContact(contact['ref']),
                         style: TextButton.styleFrom(
                           backgroundColor: secondaryColor,
                           foregroundColor: Colors.white,
@@ -1067,35 +1102,33 @@ class _PrivacySecurityWidgetState extends State<PrivacySecurityWidget> {
                       ),
                     );
                   },
-                ),
-              ),
-            ],
-            SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: availableMatchesData.isEmpty
-                    ? null
-                    : () => setState(() => selectedSection = 'selectMatch'),
-                icon: Icon(Icons.add_circle_outline, size: 20),
-                label: Text('Bloquer un match',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: availableMatchesData.isEmpty
-                      ? Colors.grey
-                      : tertiaryColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
+                );
+              },
             ),
-          ],
-        );
-      },
+          ),
+        ],
+        SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: availableMatchesData.isEmpty
+                ? null
+                : () => setState(() => selectedSection = 'selectMatch'),
+            icon: Icon(Icons.add_circle_outline, size: 20),
+            label: Text('Bloquer un match',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  availableMatchesData.isEmpty ? Colors.grey : tertiaryColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

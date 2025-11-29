@@ -146,10 +146,10 @@ class _SwipePageWidgetState extends State<SwipePageWidget> {
                         },
                         child: Container(
                           width: 440.0,
-                          height: 750.0,
+                          height: 600.0,
                           child: custom_widgets.SwipeWidgetAdMob(
                             width: 440.0,
-                            height: 750.0,
+                            height: 600.0,
                             currentUserId: currentUserUid,
                             currentUserGender:
                                 valueOrDefault(currentUserDocument?.gender, ''),

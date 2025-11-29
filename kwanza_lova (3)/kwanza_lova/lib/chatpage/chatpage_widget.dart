@@ -68,10 +68,10 @@ class _ChatpageWidgetState extends State<ChatpageWidget> {
               children: [
                 Container(
                   width: 440.0,
-                  height: 750.0,
+                  height: 600.0,
                   child: custom_widgets.ChatWidget(
                     width: 440.0,
-                    height: 750.0,
+                    height: 600.0,
                     currentUserId: currentUserUid,
                     chatId: widget!.chatId!,
                     otherUserId: widget!.otherUserId!,

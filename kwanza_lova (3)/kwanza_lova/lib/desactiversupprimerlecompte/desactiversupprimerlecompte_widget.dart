@@ -102,10 +102,10 @@ class _DesactiversupprimerlecompteWidgetState
               children: [
                 Container(
                   width: 440.0,
-                  height: 750.0,
+                  height: 600.0,
                   child: custom_widgets.AccountManagementWidget(
                     width: 440.0,
-                    height: 750.0,
+                    height: 600.0,
                     currentUserId: currentUserUid,
                   ),
                 ),

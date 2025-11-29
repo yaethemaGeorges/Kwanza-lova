@@ -1017,23 +1017,32 @@ class _ChatWidgetState extends State<ChatWidget> with WidgetsBindingObserver {
     }
 
     try {
+      // ✅ ÉTAPE 1 : DEMANDER LES PERMISSIONS D'ABORD
+      print('🎥 Demande des permissions...');
+
       PermissionStatus micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        print('❌ Permission microphone refusée');
+        _showPermissionError('microphone');
+        return;
+      }
 
       if (type == 'video') {
         PermissionStatus cameraStatus = await Permission.camera.request();
         if (!cameraStatus.isGranted) {
+          print('❌ Permission caméra refusée');
           _showPermissionError('caméra');
           return;
         }
       }
 
-      if (!micStatus.isGranted) {
-        _showPermissionError('microphone');
-        return;
-      }
+      print('✅ Permissions accordées');
 
+      // ✅ ÉTAPE 2 : CRÉER LE DOCUMENT D'APPEL
       final roomName =
           'chat_${widget.chatId}_${DateTime.now().millisecondsSinceEpoch}';
+
+      print('📞 Création de l\'appel: $roomName');
 
       final callDoc = await FirebaseFirestore.instance
           .collection('chats')
@@ -1062,6 +1071,9 @@ class _ChatWidgetState extends State<ChatWidget> with WidgetsBindingObserver {
         'roomName': roomName,
       });
 
+      // ✅ ÉTAPE 3 : CONFIGURATION JITSI OPTIMISÉE
+      print('🎬 Lancement de Jitsi...');
+
       var jitsiMeet = JitsiMeet();
 
       var options = JitsiMeetConferenceOptions(
@@ -1072,21 +1084,75 @@ class _ChatWidgetState extends State<ChatWidget> with WidgetsBindingObserver {
           'startWithVideoMuted': type == 'audio',
           'subject':
               'Appel avec ${otherUserDisplayName.isNotEmpty ? otherUserDisplayName : widget.otherUserName}',
+          // ✅ AJOUTS CRITIQUES pour éviter l'écran noir
+          'prejoinConfig': {
+            'enabled': false, // Désactiver le pré-join
+          },
+          'disableDeepLinking': true,
         },
         featureFlags: {
           'unsaferoomwarning.enabled': false,
           'prejoinpage.enabled': false,
+          'chat.enabled': true,
+          'filmstrip.enabled': true,
+          'invite.enabled': false,
+          'android.screensharing.enabled': false, // Évite les crashs
+          'pip.enabled': false, // Désactiver picture-in-picture
+          'meeting-name.enabled': false,
+          'call-integration.enabled': false, // Important : évite les conflits
         },
         userInfo: JitsiMeetUserInfo(
           displayName: 'Vous',
+          email: '', // Peut être vide
+          avatar: null,
         ),
       );
 
-      await jitsiMeet.join(options);
+      // ✅ ÉTAPE 4 : LANCER JITSI ET ÉCOUTER LES ÉVÉNEMENTS
+      var listener = JitsiMeetEventListener(
+        conferenceJoined: (url) {
+          print('✅ Conférence rejointe: $url');
+        },
+        conferenceTerminated: (url, error) {
+          print('🔚 Conférence terminée: $url');
+          // Mettre à jour le statut de l'appel
+          callDoc.update({
+            'status': 'completed',
+            'endedAt': FieldValue.serverTimestamp(),
+          });
+        },
+        conferenceWillJoin: (url) {
+          print('⏳ Préparation de la conférence...');
+        },
+        participantJoined: (email, name, role, participantId) {
+          print('👤 Participant rejoint: $name');
+        },
+        participantLeft: (participantId) {
+          print('👋 Participant parti: $participantId');
+        },
+        audioMutedChanged: (muted) {
+          print('🎤 Audio muted: $muted');
+        },
+        videoMutedChanged: (muted) {
+          print('📹 Vidéo muted: $muted');
+        },
+        endpointTextMessageReceived: (senderId, message) {
+          print('💬 Message reçu: $message');
+        },
+        screenShareToggled: (participantId, sharing) {
+          print('🖥️ Partage d\'écran: $sharing');
+        },
+        readyToClose: () {
+          print('✅ Prêt à fermer');
+        },
+      );
 
-      await callDoc.update(
-          {'status': 'completed', 'endedAt': FieldValue.serverTimestamp()});
-    } catch (e) {
+      await jitsiMeet.join(options, listener);
+
+      print('🎉 Jitsi lancé avec succès');
+    } catch (e, stackTrace) {
+      print('❌ ERREUR JITSI: $e');
+      print('Stack trace: $stackTrace');
       _ChatErrorHandler.handleError(context, e, 'le lancement de l\'appel');
     }
   }

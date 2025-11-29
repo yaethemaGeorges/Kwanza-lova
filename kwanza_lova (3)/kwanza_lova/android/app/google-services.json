@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "601876218581-4iq9sb1rb3l07nd0m0r99rq6qv12tvu4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.Georgesyaethema.kwanzalova",
+            "certificate_hash": "16d6c1380d78cd821c48ca92a0cfd0f6eb70741f"
+          }
+        },
+        {
           "client_id": "601876218581-lba42t58476jst0f50gasptmjmihqvbr.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
