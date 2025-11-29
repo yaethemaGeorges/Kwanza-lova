@@ -6,7 +6,7 @@ workflows:
     environment:
       flutter: stable
       android_signing:
-        - keystore_reference
+        - Kwanza-lova_signature_Android
       vars:
         PACKAGE_NAME: "com.Georgesyaethema.kwanzalova"
     scripts:
@@ -26,7 +26,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - VOTRE_EMAIL@example.com
+          - yaethemageorges@gmail.com
         notify:
           success: true
           failure: true
