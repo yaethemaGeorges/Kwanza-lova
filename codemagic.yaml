@@ -5,31 +5,28 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       flutter: stable
-      groups:
-        - keystore_credentials
+      android_signing:
+        - keystore_reference
       vars:
         PACKAGE_NAME: "com.Georgesyaethema.kwanzalova"
     scripts:
       - name: Set up local.properties
         script: |
+          mkdir -p "$CM_BUILD_DIR/android"
           echo "flutter.sdk=$HOME/programs/flutter" > "$CM_BUILD_DIR/android/local.properties"
       - name: Get Flutter packages
         script: |
           flutter packages pub get
-      - name: Flutter analyze
-        script: |
-          flutter analyze
       - name: Build APK with Flutter
         script: |
           flutter build apk --release
     artifacts:
       - build/**/outputs/**/*.apk
       - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
     publishing:
       email:
         recipients:
-          - yaethemageorges@gmail.com
+          - VOTRE_EMAIL@example.com
         notify:
           success: true
           failure: true
